@@ -1,0 +1,6 @@
+{
+  "name": "Dream's Cable and Broadband Service",
+  "description": "Official portal for Dream's Cable and Broadband Service by Wasim Akram Mondal. High-speed fiber internet and crystal-clear Cable TV in West Bengal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
