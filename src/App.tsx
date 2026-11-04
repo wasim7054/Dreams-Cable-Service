@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
+import QRCode from 'qrcode'
 import {
   House, Tv, Wifi, Info, Headphones, Phone, MessageCircle, ArrowRight,
   CheckCircle2, ShieldCheck, Zap, IndianRupee, Leaf, Menu, X, CalendarDays,
@@ -8,7 +9,8 @@ import {
 
 const PHONE = '9593127054'
 const WHATSAPP = '919593127054'
-const UPI_ID = '9593127054@ybl'
+// User's specific UPI ID:
+const UPI_ID = 's2957158003@slc'
 
 type Service = 'SD Cable TV' | 'HD Cable TV' | 'Meghbela Broadband' | 'Alliance Broadband'
 
@@ -32,7 +34,32 @@ function App() {
   const [copiedUpi, setCopiedUpi] = useState(false)
   const [customPayAmount, setCustomPayAmount] = useState<number>(1200)
 
+  // Payment Modal State
+  const [payModalOpen, setPayModalOpen] = useState(false)
+  const [selectedPayApp, setSelectedPayApp] = useState<'PhonePe' | 'Google Pay' | 'Paytm' | 'Any UPI'>('Any UPI')
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('')
+
   const selectedPlan = useMemo(() => planDetails[service], [service])
+
+  // Generate UPI payment intent string
+  const upiUrl = useMemo(() => {
+    const note = encodeURIComponent(`Payment for ${service}`)
+    return `upi://pay?pa=${UPI_ID}&pn=Dreams%20Cable%20and%20Broadband&am=${customPayAmount}&cu=INR&tn=${note}`
+  }, [service, customPayAmount])
+
+  // Generate real dynamic QR code whenever amount changes
+  useEffect(() => {
+    QRCode.toDataURL(upiUrl, {
+      width: 200,
+      margin: 1,
+      color: {
+        dark: '#07551f',
+        light: '#ffffff',
+      },
+    })
+      .then((url) => setQrCodeDataUrl(url))
+      .catch((err) => console.error('QR Code error:', err))
+  }, [upiUrl])
 
   // Generate pre-filled WhatsApp message
   const bookingMessage = () => {
@@ -47,7 +74,7 @@ function App() {
       `পছন্দের তারিখ: ${date || 'যত দ্রুত সম্ভব'}`,
       `অতিরিক্ত বার্তা: ${message || 'নেই'}`,
       '--------------------------',
-      'দয়া করে সংযোগটি নিশ্চিত করুন।'
+      'দয়া করে সংযোগটি নিশ্চিত করুন।'
     ].join('\n')
     return `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(text)}`
   }
@@ -107,17 +134,37 @@ function App() {
     }
   }
 
-  // Copy UPI ID to clipboard
+  // Copy UPI ID to clipboard with visual feedback
   const handleCopyUpi = () => {
     navigator.clipboard.writeText(UPI_ID)
     setCopiedUpi(true)
     setTimeout(() => setCopiedUpi(false), 2500)
   }
 
-  // UPI deep links for PhonePe, GPay, Paytm
-  const upiIntentUrl = (appPrefix: string = 'upi') => {
-    const note = encodeURIComponent(`Payment for ${service}`)
-    return `${appPrefix}://pay?pa=${UPI_ID}&pn=Dreams%20Cable%20and%20Broadband&am=${customPayAmount}&cu=INR&tn=${note}`
+  // Open Payment for specific App (PhonePe, GPay, Paytm)
+  const handlePayAppClick = (appName: 'PhonePe' | 'Google Pay' | 'Paytm') => {
+    setSelectedPayApp(appName)
+    setPayModalOpen(true)
+    handleCopyUpi()
+
+    // Specific mobile app deep link schemes
+    let appScheme = upiUrl
+    if (appName === 'PhonePe') {
+      appScheme = `phonepe://pay?pa=${UPI_ID}&pn=Dreams%20Cable%20and%20Broadband&am=${customPayAmount}&cu=INR`
+    } else if (appName === 'Google Pay') {
+      appScheme = `tez://upi/pay?pa=${UPI_ID}&pn=Dreams%20Cable%20and%20Broadband&am=${customPayAmount}&cu=INR`
+    } else if (appName === 'Paytm') {
+      appScheme = `paytmmp://pay?pa=${UPI_ID}&pn=Dreams%20Cable%20and%20Broadband&am=${customPayAmount}&cu=INR`
+    }
+
+    // Try opening native app if on mobile device
+    try {
+      if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        window.location.href = appScheme
+      }
+    } catch {
+      // Modal provides QR code and copy button fallback
+    }
   }
 
   return (
@@ -477,11 +524,14 @@ function App() {
                   <button
                     type="button"
                     className="pill-button outline cursor-pointer"
-                    onClick={() => scrollToSection('payment')}
+                    onClick={() => {
+                      setPayModalOpen(true)
+                      setSelectedPayApp('Any UPI')
+                    }}
                     style={{ padding: '8px 16px', fontSize: '13px' }}
                   >
                     <CreditCard size={16} />
-                    <span>পেমেন্ট করুন (PhonePe/GPay/Paytm)</span>
+                    <span>UPI পেমেন্ট করুন (₹{selectedPlan.price})</span>
                   </button>
 
                   <button
@@ -606,7 +656,7 @@ function App() {
             </div>
 
             <p style={{ margin: '0 0 16px', fontSize: '14px', color: '#314e36', lineHeight: '1.6' }}>
-              নতুন কানেকশন বুকিং চার্জ অথবা মাসিক রিচার্জের জন্য সরাসরি আপনার পছন্দের UPI অ্যাপ দিয়ে নিরাপদ পেমেন্ট করুন:
+              নতুন কানেকশন চার্জ বা রিচার্জ পেমেন্টের জন্য নিচের <strong>PhonePe</strong>, <strong>Google Pay</strong>, বা <strong>Paytm</strong> বাটনে ক্লিক করুন অথবা কিউআর কোড স্ক্যান করুন:
             </p>
 
             <div className="payment-grid">
@@ -615,64 +665,61 @@ function App() {
               <div className="pay-methods">
                 
                 {/* PhonePe Option */}
-                <a
+                <button
+                  type="button"
                   className="pay-btn-brand pay-phonepe"
-                  href={upiIntentUrl('phonepe')}
-                  target="_blank"
-                  rel="noreferrer"
+                  onClick={() => handlePayAppClick('PhonePe')}
                 >
                   <div className="pay-brand-name">
                     <span className="pay-brand-icon phonepe-icon">पे</span>
-                    <div>
+                    <div style={{ textAlign: 'left' }}>
                       <div style={{ fontSize: '15px' }}>PhonePe (ফোনপে)</div>
-                      <small style={{ opacity: 0.85, fontSize: '11px' }}>Pay via PhonePe UPI App</small>
+                      <small style={{ opacity: 0.85, fontSize: '11px' }}>Pay via PhonePe App / UPI</small>
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span style={{ fontSize: '15px', fontWeight: 800 }}>₹{customPayAmount}</span>
-                    <ExternalLink size={16} />
+                    <ArrowRight size={16} />
                   </div>
-                </a>
+                </button>
 
                 {/* Google Pay Option */}
-                <a
+                <button
+                  type="button"
                   className="pay-btn-brand pay-gpay"
-                  href={upiIntentUrl('gpay')}
-                  target="_blank"
-                  rel="noreferrer"
+                  onClick={() => handlePayAppClick('Google Pay')}
                 >
                   <div className="pay-brand-name">
                     <span className="pay-brand-icon gpay-icon">G</span>
-                    <div>
+                    <div style={{ textAlign: 'left' }}>
                       <div style={{ fontSize: '15px' }}>Google Pay (গুগল পে)</div>
-                      <small style={{ opacity: 0.85, fontSize: '11px' }}>Pay via Google Pay UPI App</small>
+                      <small style={{ opacity: 0.85, fontSize: '11px' }}>Pay via Google Pay App / UPI</small>
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span style={{ fontSize: '15px', fontWeight: 800 }}>₹{customPayAmount}</span>
-                    <ExternalLink size={16} />
+                    <ArrowRight size={16} />
                   </div>
-                </a>
+                </button>
 
                 {/* Paytm Option */}
-                <a
+                <button
+                  type="button"
                   className="pay-btn-brand pay-paytm"
-                  href={upiIntentUrl('paytmmp')}
-                  target="_blank"
-                  rel="noreferrer"
+                  onClick={() => handlePayAppClick('Paytm')}
                 >
                   <div className="pay-brand-name">
                     <span className="pay-brand-icon paytm-icon">P</span>
-                    <div>
+                    <div style={{ textAlign: 'left' }}>
                       <div style={{ fontSize: '15px' }}>Paytm (পেটিএম)</div>
-                      <small style={{ opacity: 0.85, fontSize: '11px' }}>Pay via Paytm UPI App</small>
+                      <small style={{ opacity: 0.85, fontSize: '11px' }}>Pay via Paytm App / UPI</small>
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span style={{ fontSize: '15px', fontWeight: 800 }}>₹{customPayAmount}</span>
-                    <ExternalLink size={16} />
+                    <ArrowRight size={16} />
                   </div>
-                </a>
+                </button>
 
                 {/* Quick Amount Selector */}
                 <div style={{ marginTop: '8px' }}>
@@ -706,52 +753,25 @@ function App() {
 
               </div>
 
-              {/* Right Column: QR Code & UPI ID Card */}
+              {/* Right Column: Real Scannable QR Code & UPI ID Card */}
               <div className="qr-card">
                 <div className="qr-image-wrap">
-                  {/* High quality clean SVG UPI QR representation */}
-                  <svg width="150" height="150" viewBox="0 0 150 150" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect width="150" height="150" fill="white"/>
-                    {/* Top-Left Finder */}
-                    <rect x="12" y="12" width="40" height="40" rx="6" stroke="#07551f" strokeWidth="6" fill="none"/>
-                    <rect x="22" y="22" width="20" height="20" rx="3" fill="#07551f"/>
-                    {/* Top-Right Finder */}
-                    <rect x="98" y="12" width="40" height="40" rx="6" stroke="#07551f" strokeWidth="6" fill="none"/>
-                    <rect x="108" y="22" width="20" height="20" rx="3" fill="#07551f"/>
-                    {/* Bottom-Left Finder */}
-                    <rect x="12" y="98" width="40" height="40" rx="6" stroke="#07551f" strokeWidth="6" fill="none"/>
-                    <rect x="22" y="108" width="20" height="20" rx="3" fill="#07551f"/>
-                    {/* Data dots */}
-                    <rect x="62" y="18" width="8" height="8" fill="#13832a"/>
-                    <rect x="78" y="18" width="8" height="8" fill="#13832a"/>
-                    <rect x="62" y="34" width="8" height="8" fill="#13832a"/>
-                    <rect x="78" y="34" width="8" height="8" fill="#13832a"/>
-                    <rect x="18" y="62" width="8" height="8" fill="#13832a"/>
-                    <rect x="34" y="62" width="8" height="8" fill="#13832a"/>
-                    <rect x="18" y="78" width="8" height="8" fill="#13832a"/>
-                    <rect x="34" y="78" width="8" height="8" fill="#13832a"/>
-                    <rect x="62" y="62" width="24" height="24" rx="4" fill="#087b25"/>
-                    <path d="M74 68L68 74H72V80H76V74H80L74 68Z" fill="white"/>
-                    <rect x="98" y="62" width="8" height="8" fill="#13832a"/>
-                    <rect x="114" y="62" width="8" height="8" fill="#13832a"/>
-                    <rect x="130" y="62" width="8" height="8" fill="#13832a"/>
-                    <rect x="98" y="78" width="8" height="8" fill="#13832a"/>
-                    <rect x="122" y="78" width="8" height="8" fill="#13832a"/>
-                    <rect x="62" y="98" width="8" height="8" fill="#13832a"/>
-                    <rect x="78" y="98" width="8" height="8" fill="#13832a"/>
-                    <rect x="62" y="114" width="8" height="8" fill="#13832a"/>
-                    <rect x="78" y="114" width="8" height="8" fill="#13832a"/>
-                    <rect x="62" y="130" width="8" height="8" fill="#13832a"/>
-                    <rect x="78" y="130" width="8" height="8" fill="#13832a"/>
-                    <rect x="98" y="98" width="8" height="8" fill="#13832a"/>
-                    <rect x="114" y="114" width="8" height="8" fill="#13832a"/>
-                    <rect x="130" y="130" width="8" height="8" fill="#13832a"/>
-                  </svg>
+                  {qrCodeDataUrl ? (
+                    <img
+                      src={qrCodeDataUrl}
+                      alt="UPI QR Code for s2957158003@slc"
+                      style={{ width: '160px', height: '160px', display: 'block' }}
+                    />
+                  ) : (
+                    <div style={{ width: '160px', height: '160px', display: 'grid', placeItems: 'center', color: '#07551f' }}>
+                      <QrCode size={60} />
+                    </div>
+                  )}
                 </div>
 
                 <div className="upi-info">
                   <strong>যেকোনো UPI অ্যাপ দিয়ে স্ক্যান করুন</strong>
-                  <div>PhonePe • Google Pay • Paytm • BHIM</div>
+                  <div style={{ fontSize: '11px', color: '#4a6b52' }}>PhonePe • Google Pay • Paytm • BHIM</div>
                 </div>
 
                 {/* Click to Copy UPI ID */}
@@ -766,7 +786,7 @@ function App() {
                 </button>
 
                 <div className="copy-tooltip">
-                  {copiedUpi ? '✓ UPI ID সফলভাবে কপি হয়েছে!' : 'ক্লিক করে UPI ID কপি করুন'}
+                  {copiedUpi ? '✓ UPI ID সফলভাবে কপি হয়েছে!' : 'ক্লিক করে UPI ID কপি করুন'}
                 </div>
 
                 <div style={{ marginTop: '10px', fontSize: '11px', color: '#55735b', maxWidth: '280px', lineHeight: '1.4' }}>
@@ -779,6 +799,91 @@ function App() {
         </section>
 
       </main>
+
+      {/* ================= INTERACTIVE PAYMENT MODAL ================= */}
+      {payModalOpen && (
+        <div className="pay-modal-overlay" onClick={() => setPayModalOpen(false)}>
+          <div className="pay-modal-card" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="pay-modal-close"
+              onClick={() => setPayModalOpen(false)}
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+
+            {/* Modal Header */}
+            <div style={{ marginBottom: '14px' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#eafbe3', color: '#087b25', padding: '4px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 800, marginBottom: '6px' }}>
+                <CheckCircle2 size={14} />
+                <span>{selectedPayApp} UPI Payment</span>
+              </div>
+              <h3 style={{ margin: '4px 0', fontSize: '20px', color: '#07551f' }}>
+                পেমেন্ট সম্পন্ন করুন: ₹{customPayAmount}
+              </h3>
+              <p style={{ margin: 0, fontSize: '12px', color: '#4d6954' }}>
+                UPI ID: <strong>{UPI_ID}</strong>
+              </p>
+            </div>
+
+            {/* QR Code Container */}
+            <div style={{ background: '#f5fcf3', border: '1.5px dashed #40c93b', borderRadius: '16px', padding: '14px', display: 'inline-block', margin: '0 auto 14px' }}>
+              {qrCodeDataUrl ? (
+                <img
+                  src={qrCodeDataUrl}
+                  alt="QR Code"
+                  style={{ width: '160px', height: '160px', display: 'block', margin: '0 auto' }}
+                />
+              ) : (
+                <QrCode size={120} color="#087b25" />
+              )}
+              <div style={{ fontSize: '11px', fontWeight: 700, color: '#087b25', marginTop: '6px' }}>
+                {selectedPayApp} দিয়ে স্ক্যান করুন
+              </div>
+            </div>
+
+            {/* UPI ID Copy Field */}
+            <div style={{ marginBottom: '16px' }}>
+              <button
+                type="button"
+                className="upi-id-badge"
+                onClick={handleCopyUpi}
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                <span>{UPI_ID}</span>
+                {copiedUpi ? <Check size={16} color="#087b25" /> : <Copy size={16} />}
+              </button>
+              <div style={{ fontSize: '11px', color: copiedUpi ? '#087b25' : '#5c705f', fontWeight: 600 }}>
+                {copiedUpi ? '✓ UPI ID ক্লিপবোর্ডে কপি হয়েছে!' : 'UPI ID কপি করে অ্যাপে সরাসরি পে করতে পারেন'}
+              </div>
+            </div>
+
+            {/* Direct Mobile Launch Button */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <a
+                className="pill-button"
+                href={upiUrl}
+                style={{ width: '100%', padding: '10px 16px', fontSize: '13px' }}
+              >
+                <CreditCard size={16} />
+                <span>সরাসরি UPI অ্যাপে পে করুন (₹{customPayAmount})</span>
+              </a>
+
+              <a
+                className="wa-send-btn"
+                href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(`নমস্কার, আমি Dream's Cable and Broadband Service-এ ₹${customPayAmount} পেমেন্ট করেছি (UPI ID: ${UPI_ID})। দয়া করে ভেরিফাই করুন।`)}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{ padding: '10px 16px', fontSize: '13px' }}
+              >
+                <MessageCircle size={16} />
+                <span>পেমেন্ট স্ক্রিনশট WhatsApp-এ পাঠান</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="footer" id="contact">
